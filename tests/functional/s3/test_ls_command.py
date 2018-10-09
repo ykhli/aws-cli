@@ -59,7 +59,10 @@ class TestLSCommand(BaseAWSCommandParamsTest):
         self.parsed_responses = [{"CommonPrefixes": [], "Contents": [
             {"Key": "foo/bar.txt", "Size": 100,
              "LastModified": time_utc}]}]
-        stdout, _, _ = self.run_cmd('s3 ls s3://bucket/ --page-size 8 --recursive', expected_rc=0)
+        stdout, _, _ = self.run_cmd(
+            's3 ls s3://bucket/ --page-size 8 --recursive',
+            expected_rc=0
+        )
         call_args = self.operations_called[0][1]
         # We should not be calling the args with any delimiter because we
         # want a recursive listing.
@@ -198,6 +201,54 @@ class TestLSCommand(BaseAWSCommandParamsTest):
             'RequestPayer': 'requester', 'EncodingType': 'url',
             'Prefix': 'foo/'
         })
+
+    def test_recursive_list_at_prefix(self):
+        time_utc = "2014-01-09T20:45:49.000Z"
+        self.parsed_responses = [
+            {"Contents": [{"Key": "foo/bar/baz.txt", "Size": 100,
+                           "LastModified": time_utc},
+                          {"Key": "foo/test.txt", "Size": 100,
+                           "LastModified": time_utc}]}
+        ]
+        stdout, _, _ = self.run_cmd(
+            's3 ls s3://bucket/foo/ --recursive', expected_rc=0
+        )
+        # The prefix of foo/ should have been removed form both
+        # output keys.
+        self.assertIn('test.txt', stdout)
+        self.assertNotIn('foo/test.txt', stdout)
+        self.assertIn('bar/baz.txt', stdout)
+        self.assertNotIn('foo/bar/baz.txt', stdout)
+
+    def test_recursive_list_at_top_level_bucket(self):
+        time_utc = "2014-01-09T20:45:49.000Z"
+        self.parsed_responses = [
+            {"Contents": [{"Key": "foo/bar/baz.txt", "Size": 100,
+                           "LastModified": time_utc},
+                          {"Key": "foo/test.txt", "Size": 100,
+                           "LastModified": time_utc}]}
+        ]
+        stdout, _, _ = self.run_cmd(
+            's3 ls s3://bucket --recursive', expected_rc=0
+        )
+        # Should be displayed as full path when listing from top level
+        # bucket
+        self.assertIn('foo/test.txt', stdout)
+        self.assertIn('foo/bar/baz.txt', stdout)
+
+    def test_recursive_list_edge_case(self):
+        time_utc = "2014-01-09T20:45:49.000Z"
+        self.parsed_responses = [
+            {"Contents": [{"Key": "foo/bar/baz.txt", "Size": 100,
+                           "LastModified": time_utc},
+                          {"Key": "foo/test.txt", "Size": 100,
+                           "LastModified": time_utc}]}
+        ]
+        stdout, _, _ = self.run_cmd(
+            's3 ls s3://bucket/f --recursive', expected_rc=0
+        )
+        self.assertIn('foo/test.txt', stdout)
+        self.assertIn('foo/bar/baz.txt', stdout)
 
 
 if __name__ == "__main__":
